@@ -1,13 +1,12 @@
 ---
-title: "2013 Grand Slams Tennis Data Interim Report"
-author: "Önder Türe"
-date: "2024-05-04"
-output: word_document
+title: "2013 Grand Slams Tennis Data Analysis and Modelling"
+format: html
+editor: visual
+toc: true
+toc-title: "Table Of Contents"
+toc-depth: 3
+toc-location: left
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
 ```{r library, include=FALSE}
 library(knitr)
@@ -19,29 +18,27 @@ library(caret)
 library(e1071)
 library(glmnet)
 library(corrplot)
-library(car)
-library(pROC)
 ```
 
-## 1. Brief Statement of The Aim of The Project
+## 1. Brief Statement of the aim of the project
 
-In this project, data is 4 different tennis singles 2013 grand slams match statistics. In the data, there are different statistics about match like foul, number of firs serve win, and others that will be explained in the next part. Aim of the project is predict the result of the tennis match by using different match statistics. Another aim is to find most effective match statistics for the win. To reach this aim, firstly, data will be cleaned and tidied for the EDA and CDA. Then, explanatory data analysis and confirmatory data analysis will be done to see how data distributed and to interpret variables effectively. Then, missing values will be handled and data manipulation and feature engineering will be done if it is necessary. Finally, for statistical modeling to predict match result cross-validation techniques will be used. And, statistical modeling will be performed and performance of statistical modeling will be investigated.
+In this project, data is 4 different tennis singles 2013 grand slams match statistics. In the data, there are different statistics about match like foul, number of firs serve win, and others that will be explained in the next part. Aim of the project is predict the result of the tennis match by using different match statistics. Another aim is to find most effective match statistics for the win, and how is change for different tournament and gender. To reach this aim, firstly, data will be cleaned and tidied for the EDA and CDA. Then, explanatory data analysis will be done to see how data distributed and to interpret variables effectively. After EDA, missing values will be handled and data manipulation and feature engineering will be done if it is necessary. After data preparation is done, Confirmatory data analysis will be done by considering EDA. Finally, for statistical modeling to predict match result cross-validation techniques will be used. Finally, statistical modeling will be performed and performance of statistical modeling will be investigated.
 
-## 2. Source of The Data, Variables and Dependent Variable
+## 2. Source of the data variables, dependent variable
 
 ```{r combine_DF, include=FALSE}
 ## Getting data
-AusOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/AusOpen-men-2013.csv")
-AusOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/AusOpen-women-2013.csv")
+AusOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/AusOpen-men-2013.csv")
+AusOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/AusOpen-women-2013.csv")
 
-FrenchOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/FrenchOpen-men-2013.csv")
-FrenchOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/FrenchOpen-women-2013.csv")
+FrenchOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/FrenchOpen-men-2013.csv")
+FrenchOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/FrenchOpen-women-2013.csv")
 
-USOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/USOpen-men-2013.csv")
-USOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/USOpen-women-2013.csv")
+USOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/USOpen-men-2013.csv")
+USOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/USOpen-women-2013.csv")
 
-WimbledonMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/Wimbledon-men-2013.csv")
-WimbledonWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_project/main/tennis_data/Wimbledon-women-2013.csv")
+WimbledonMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/Wimbledon-men-2013.csv")
+WimbledonWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/Wimbledon-women-2013.csv")
 ##
 
 ##Combine all data and create new variables as "tournament" and "gender"
@@ -73,15 +70,44 @@ GrandSlam <- rbind(list_df[[1]],list_df[[2]],list_df[[3]],list_df[[4]],list_df[[
 
 ```
 
-Source of the data is [UC Irvine Machine Learning Repository](https://archive.ics.uci.edu/dataset/300/tennis+major+tournament+match+statistics). In the source of the data, there is 8 different csv file. Each one represent different tournament from 2013 (Aus Open-Men,AusOpen-Women, USOpen-men,...). Data has 4 different tournament group by gender, so we have 8 different csv file data. All of the 8 csv data has same 42 variables, so all of them are combined to 1 csv file and 2 variable added as tournament and gender. At the end, data has 44 variable. Variable descriptions can be seen on [APPENDİX A](#appendix-a). Dependent variable is 'Result'. Our data have `r dim(GrandSlam)[1]` match observations.
+Source of the data is [UC Irvine Machine Learning Repository](https://archive.ics.uci.edu/dataset/300/tennis+major+tournament+match+statistics). In the source of the data, there is 8 different csv file. Each one represent different tournament from 2013 (Aus Open-Men,AusOpen-Women, USOpen-men,...). Data has 4 different tournament group by gender, so we have 8 different csv file data. All of the 8 csv data has same 42 variables, so all of them are combined to 1 csv file and 2 variable added as tournament and gender. At the end, data has 44 variable. Dependent variable is 'Result'. Our data have `r dim(GrandSlam)[1]` match observations.
+
+| Name of Variable | Definition of Variable                                                                             |
+|--------------------------|----------------------------------------------|
+| Player 1         | Name of Player 1 (Nominal)                                                                         |
+| Player 2         | Name of Player 2 (Nominal)                                                                         |
+| Round            | Round of the tourneament (Nominal Ordinal) (1: 1st elimination round, 7: Final of the tournament ) |
+| Result           | Result of the match (0/1) - Referenced on Player 1 is Result = 1 (Nominal)                         |
+| FSP.1 and .2     | First Serve Percentage for player 1 (if .2, player 2) (Integer)                                    |
+| FSW.1 and .2     | First Serve Won by player 1 (if .2, player 2) (Integer)                                            |
+| SSP.1 and .2     | Second Serve Percentage for player 1 (if .2, player 2) (Integer)                                   |
+| SSW.1 and .2     | Second Serve Won by player 1 (if .2, player 2) (Integer)                                           |
+| ACE.1 and .2     | Aces won by player 1 (if .2, player 2) (Integer)                                                   |
+| DBF.1 and .2     | Double Faults committed by player 1 (if .2, player 2) (Integer)                                    |
+| WNR.1 and .2     | Winners earned by player 1 (if .2, player 2) (Integer)                                             |
+| UFE.1 and .2     | Unforced Errors committed by player 1 (if .2, player 2) (Integer)                                  |
+| BPC.1 and .2     | Break Points Created by player 1 (if .2, player 2) (Integer)                                       |
+| BPW.1 and .2     | Break Points Won by player 1 (if .2, player 2) (Integer)                                           |
+| NPA.1 and .2     | Net Points Attempted by player 1 (if .2, player 2) (Integer)                                       |
+| NPW.1 and .2     | Net Points Won by player 1 (if .2, player 2) (Integer)                                             |
+| TPW.1 and .2     | Total Points Won by player 1 (if .2, player 2) (Integer)                                           |
+| ST1.1 and .2     | Set 1 result for Player 1 (if .2, player 2) (Integer)                                              |
+| ST2.1 and .2     | Set 2 Result for Player 1 (if .2, player 2) (Integer)                                              |
+| ST3.1 and .2     | Set 3 Result for Player 1 (if .2, player 2) (Integer)                                              |
+| ST4.1 and .2     | Set 4 Result for Player 1 (if .2, player 2) (Integer)                                              |
+| ST5.1 and .2     | Set 5 Result for Player 1 (if .2, player 2) (Integer)                                              |
+| FNL.1 and .2     | Final Number of Games Won by Player 1 (if .2, player 2) (Integer)                                  |
+| tournament       | Tournament name                                                                                    |
+| gender           | Tournament gender                                                                                  |
+
+: Variable Name and Definition
 
 ## 3. Data Cleaning and Tidying
 
-Check variables and data types for character variables and some variables that should be factor. Others are already numeric type as desired.
+Check variables and data types:
 
 ```{r structure, echo=FALSE}
-dumy<-GrandSlam%>%select(c(Result,Player1,Player2,Round,tournament,gender))
-str(dumy)
+kable(str(GrandSlam))
 ```
 
 Character values, "Round" and "Result" should be a factor. And name of the variables should be all upper or lower letter. So, all names of variables changed to upper letter.
@@ -89,16 +115,15 @@ Character values, "Round" and "Result" should be a factor. And name of the varia
 ```{r upper, echo=FALSE}
 ## Change all varaiable names to upper letter
 colnames(GrandSlam) <- toupper(colnames(GrandSlam))
-colnames(GrandSlam)
 ```
 
-Before change character values, "Round" and "Result" to factor let's check head and tail of the data set. There is 44 variable, so visualizing the head and tail is not feasible. Therefore, just problematic variable parts of the data shown.
+Before change character values, "Round" and "Result" to factor let's check head and tail of the data set.
 
-Head and tail of the PLAYER1 and PLAYER2:
+Head and tail of the data:
 
 ```{r head_tail, echo=FALSE}
-kable(head(GrandSlam[,c(1:2)],3), label = "Head of the data")
-kable(tail(GrandSlam[,c(1:2)],3),label = "Tail of the data")
+kable(head(GrandSlam), label = "Head of the data")
+kable(tail(GrandSlam),label = "Tail of the data")
 ```
 
 As seen on the "PLAYER1" and "PLAYER2", there is problem about how player names saved to data. In some rows player names saved as full name (first name + surname). However, in other rows, player names saved as shortened way like "M.Bartolli". This problem fixed by convert all names shortened.
@@ -191,19 +216,21 @@ fixed2 <- sapply(GrandSlam$PLAYER2,fixed_name)
 GrandSlam$PLAYER1 <- fixed1
 GrandSlam$PLAYER2 <- fixed2
 all_player=c(GrandSlam$PLAYER1,GrandSlam$PLAYER2)
+length(unique(all_player))
 ```
 
 After fixed player names, there is `r length(unique(all_player))` player on this data set.
 
 ```{r head_tail2, echo=FALSE}
-kable(head(GrandSlam[,c(1:2)],3), label = "Head of the data")
+kable(head(GrandSlam), label = "Head of the data")
+kable(tail(GrandSlam),label = "Tail of the data")
 ```
 
-Except player name columns, data seems well tabulated data. There is no unnecessary columns. There is `r sum(duplicated(GrandSlam))` duplicated observations in the data set. Player names fixed too.
+As seen on the head and tail of the data, data seems well tabulated data. There is no unnecessary columns. There is `r sum(duplicated(GrandSlam))` duplicated observations in the data set. Player names fixed too.
 
-Now character values, "Round" and "Result" can be changed to factor. And finalize structure of the data is:
+Now character values, "Round" and "Result" can be changed to factor. And finalize structure of the data is below:
 
-```{r factorize,include=FALSE,echo=FALSE}
+```{r factorize, echo=FALSE}
 ## Change 'Result' value for player-1 1 and player-2 2:
 GrandSlam$RESULT <- ifelse(GrandSlam$RESULT==0, 2,1)
 ## Convert variables to factor
@@ -213,16 +240,15 @@ GrandSlam$RESULT <-factor(GrandSlam$RESULT)
 GrandSlam$ROUND <-factor(GrandSlam$ROUND)
 GrandSlam$TOURNAMENT <-factor(GrandSlam$TOURNAMENT)
 GrandSlam$GENDER <-factor(GrandSlam$GENDER)
-dumy<-GrandSlam%>%select(c(RESULT,PLAYER1,PLAYER2,ROUND,TOURNAMENT,GENDER))
-str(dumy)
+str(GrandSlam)
 ```
 
 Also there is problem about BPC(Break Points Created) and BPW(Break Points Win). Logically, BPC must be greater or equal to BPW but in some rows BPC is lower than BPW like below example. This fixed by exchanging BPC values by BPW and BPW values by BPC when BPW \> BPC.
 
 ```{r BPC_BPW_problem, echo=FALSE}
 cond<-which(GrandSlam$BPW.1>GrandSlam$BPC.1)
-kable(head(GrandSlam[cond,c("BPC.1","BPW.1","BPC.2","BPW.2")],3),label = "BPC and BPW Problematic Observations")
-#Exchanging problematic BPC and BPW observations
+head(GrandSlam[cond,c("BPC.1","BPW.1","BPC.2","BPW.2")])
+
 for(i in 1:length(GrandSlam$PLAYER1)){
   if (!is.na(GrandSlam$BPC.1[i] < GrandSlam$BPW.1[i])){
     if(GrandSlam$BPC.1[i] < GrandSlam$BPW.1[i]){
@@ -245,8 +271,8 @@ There are similar problems with NPA and NPW for Aus open and French Open tournam
 
 ```{r NPA_NPW_problem, echo=FALSE}
 cond<-which(GrandSlam$NPW.1>GrandSlam$NPA.1)
-kable(head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")],3),label = "NPA and NPW Problematic Observations")
-#Exchanging problematic NPA and NPW observations
+head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")])
+
 for(i in 1:length(GrandSlam$PLAYER1)){
   if (!is.na(GrandSlam$NPA.1[i] < GrandSlam$NPW.1[i])){
     if(GrandSlam$NPA.1[i] < GrandSlam$NPW.1[i]){
@@ -267,9 +293,9 @@ for(i in 1:length(GrandSlam$PLAYER1)){
 
 After fix the problem, all BPC values are greater than BPW. Same for NPA and NPW.
 
-```{r BPC_BPW_new,include=FALSE, echo=FALSE}
-head(GrandSlam[cond,c("BPC.1","BPW.1","BPC.2","BPW.2")],3)
-head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")],3)
+```{r BPC_BPW_new, echo=FALSE}
+head(GrandSlam[cond,c("BPC.1","BPW.1","BPC.2","BPW.2")])
+head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")])
 ```
 
 ## 4. Explanatory Data Analysis(EDA) and Confirmatory Data Analysis(CDA)
@@ -280,17 +306,21 @@ Below there are frequency tables for tournament, round, result and gender. Ausop
 
 ```{r freq_table, echo=FALSE}
 ## Frequency table for categorical
-kable(summary(GrandSlam%>% select(c(TOURNAMENT,ROUND,RESULT,GENDER))))
+kable(table(GrandSlam$TOURNAMENT),col.names = c('Tournament','Freq'))
+kable(table(GrandSlam$ROUND),col.names = c('Round','Freq'))
+kable(table(GrandSlam$RESULT),col.names = c('Result','Freq'))
+kable(table(GrandSlam$GENDER),col.names = c('Gender','Freq'))
+
 kable(table(GrandSlam$TOURNAMENT,GrandSlam$ROUND))
 ```
 
-Summary statistics for numeric variables are below. Average performances are almost equal for player 1 and player 2 statistics. Average performance of tennis players can be seen in this summary statistics.
+Summary statistics for numeric variables are below. Avarage performances are almost equal for player 1 and player 2 statistics. Avarage performance of tennis players can be seen in this summary statistics.
 
 ```{r summary, echo=FALSE}
 sum1<-GrandSlam %>%
   select(PLAYER1,PLAYER2)
 sum2 <-GrandSlam %>% 
-  select(FSP.1,FSP.2,FSW.1,FSW.2,ACE.1,ACE.2,BPC.1,BPC.2)
+  select(FSP.1,FSP.2,FSW.1,FSW.2 )
 sum3 <-GrandSlam %>% 
   select(SSP.1,SSP.2,SSW.1,SSW.2 )
 sum4 <-GrandSlam %>% 
@@ -301,18 +331,24 @@ sum6 <-GrandSlam %>%
   select(BPC.1,BPC.2,BPW.1,BPW.2)
 sum7 <-GrandSlam %>% 
   select(NPA.1,NPA.2,NPW.1,NPW.2,TPW.1,TPW.2 )
-
-kable(summary(sum2))
+summary(sum1)
+summary(sum2)
+summary(sum3)
+summary(sum4)
+summary(sum5)
+summary(sum6)
+summary(sum7)
 ```
 
 Also, set result summary is like below, as seen, there are a lot of NA values for ST4 and ST5 especially. This is because most of the match is not last to 5 or 4 set. It is over in 2 or 3 sets.
 
-```{r set_sum, echo=FALSE}
+```{r set_sum}
 sum8 <-GrandSlam %>% 
   select(ST1.1,ST2.1,ST3.1,ST4.1,ST5.1)
 sum9 <-GrandSlam %>% 
   select(ST1.2,ST2.2,ST3.2,ST4.2,ST5.2)
-kable(summary(sum8))
+summary(sum8)
+summary(sum9)
 ```
 
 ### Research Questions
@@ -352,9 +388,9 @@ t_test_BPC <- t.test(BPC.1.P1win, BPC.2.P1win, alternative = "greater", var.equa
 print(t_test_BPC)
 ```
 
-H0 is BPC.1 is equal or less than BPC.2 for RESULT is equals 1. H1 is BPC.1 is greater than BPC.2 for RESULT is equals 1. From t test confidence interval is `r t_test_BPC$conf.int` to infinite. So we can reject null hypothesis. Mean of BPC.1 is greater than mean of BPC.2 for RESULT equals 1. Similarly, mean of BPW.1 is greater than mean of BPW.2 for RESULT equals 1 according to t-test. This situation is valid for RESULT equals 2 too. t-test results does not shown here to simplicity of document, they can be seen on r code file.
+H0 is BPC.1 is equal or less than BPC.2 for RESULT is equals 1. H1 is BPC.1 is greater than BPC.2 for RESULT is equals 1. From t test confidence interval is `r t_test_BPC$conf.int` to infinite. So we can reject null hypothesis. Mean of BPC.1 is greater than mean of BPC.2 for RESULT equals 1. Similarly, mean of BPW.1 is greater than mean of BPW.2 for RESULT equals 1 according to t-test.
 
-```{r CDA_1_, echo=FALSE,include=FALSE, warning=FALSE}
+```{r CDA_1_, echo=FALSE, warning=FALSE}
 BPC.1.P1win <- GrandSlam %>%
   filter(RESULT==1) %>%
   select(BPC.1)
@@ -380,7 +416,9 @@ t_test_BPW <- t.test(BPW.1.P1win, BPW.2.P1win, alternative = "greater", var.equa
 print(t_test_BPW)
 ```
 
-```{r CDA_1_2, echo=FALSE,include=FALSE, warning=FALSE}
+This situation is valid for RESULT equals 2 too.
+
+```{r CDA_1_2, echo=FALSE, warning=FALSE}
 BPC.2.P2win <- GrandSlam %>%
   filter(RESULT==2) %>%
   select(BPC.2)
@@ -423,18 +461,16 @@ GrandSlam %>%
   ggplot(aes(y=FSW.1,fill = RESULT))+
   geom_boxplot()+
   facet_wrap(~RESULT)+
-  ggtitle("Box Plot of FSW.1 group by Result")+
   theme_bw()
 
 GrandSlam %>%
   ggplot(aes(y=FSW.2,fill = RESULT))+
   geom_boxplot()+
   facet_wrap(~RESULT)+
-  ggtitle("Box Plot of FSW.2 group by Result")+
   theme_bw()
 ```
 
-For confirmatory data analysis for this reasearch question, two paired t-test can be conduct too. As seen on the t-test result, mean of FSP.1 is changed significantly when result change. t-tests for FSP.2 and FSW.2 are like FSP.1 and FSP.2, t-test resuşts can be seen on r code file.
+For confirmatory data analysis for this reasearch question, two paired t-test can be conduct too. As seen on the t-test result, mean of FSP.1 is changed significantly when result change.
 
 ```{r CDA_2, echo=FALSE, warning=FALSE}
 winning_player1 <- GrandSlam[GrandSlam$RESULT == 1, ]
@@ -455,7 +491,9 @@ print("Two-sample t-test for First Serve Winning (FSW.1):")
 print(t_test_fsw1)
 ```
 
-```{r CDA_2_2, echo=FALSE,include=FALSE, warning=FALSE}
+t-tests for FSP.2 and FSW.2 are like FSP.1 and FSP.2
+
+```{r CDA_2_2, echo=FALSE, warning=FALSE}
 # Conduct two-sample t-tests for FSP
 fsp2_P1win <- winning_player1$FSP.2
 fsp2_P2win <- winning_player2$FSP.2
@@ -509,6 +547,7 @@ print("ANAVO of ACE")
 summary(anova_ace)
 ```
 
+
 #### Are there differences in the net points attempt (NPA) and net points win (NPW) by players across different rounds of the tournament by result?
 
 NPA and NPW has right skewed distribution for each round except 7th round, but in 7th round we have 8 observation so it can mislead the interpretation of this plot for 7th round. Therefore player NPA and NPW performances are similar for all rounds except 7th.
@@ -549,7 +588,7 @@ ggplot(GrandSlam,aes(x=TPW,y=BPC,size = FSW))+
   theme_bw()
 ```
 
-For CDA, we can check correlations between BPC, TPW and FSW. As seen on correlation plot,
+For CDA, we can check correlations between BPC, TPW and FSW. As seen on correlation plot, 
 
 ```{r CDA_5, echo=FALSE, warning=FALSE}
 
@@ -581,7 +620,7 @@ GrandSlam <- GrandSlam %>%
          NPW))
 ```
 
-#### Is there any relationship between player 1(.1) statistics? And Player 2(.2) too?
+#### Is there any relationship between player 1 statistics? And Player 2 too?
 
 ```{r EDA_6, echo=FALSE, warning=FALSE}
 # Compute Pearson correlation coefficients
@@ -604,16 +643,31 @@ na_columns <- GrandSlam %>%
 colSums(is.na(na_columns))
 ```
 
-For, FNL.1 and FNL.2 NA observation are because of cancelled match. At the [link](https://www.tennisabstract.com/cgi-bin/wplayer-classic.cgi?p=AlizeCornet&f=A2014qqC2), you can see this match (date 13.01.2014) is cancelled. This row is removed from data set.
+For, FNL.1 and FNL.2 NA values are because of cancelled match. At the [link](https://www.tennisabstract.com/cgi-bin/wplayer-classic.cgi?p=AlizeCornet&f=A2014qqC2), you can see this match (date 13.01.2014) is cancelled. This row is removed from data set.
 
 ```{r NA_2, echo=FALSE, warning=FALSE}
+GrandSlam %>%
+  filter(is.na(FNL.1))
+
 GrandSlam <- GrandSlam %>%
   filter(!is.na(FNL.1))
 ```
 
-There is `r dim(GrandSlam%>%select(ACE.1)%>%filter(is.na(GrandSlam$ACE.1)))[1]` NA in ACE.1 and ACE.2 columns at same observations, this is MCAR type missing observations, we can fill this values by median value of ACE. Median of ACE.1 and ACE.2 are `r median(na.omit(GrandSlam$ACE.1))` and `r median(na.omit(GrandSlam$ACE.2))`.
+After removing the row that FNL values NA:
+
+```{r NA_3, echo=FALSE, warning=FALSE}
+na_columns <- GrandSlam %>%
+  select_if(~ any(is.na(.)))
+
+colSums(is.na(na_columns))
+```
+
+There is 22 NA in ACE.1 and ACE.2 columns at same observations, this is MCAR type missing observations, we can fill this values by median value of ACE. Median of ACE.1 and ACE.2 are `r median(na.omit(GrandSlam$ACE.1))` and `r median(na.omit(GrandSlam$ACE.2))`.
 
 ```{r NA_4, echo=FALSE, warning=FALSE}
+GrandSlam %>%
+  filter(is.na(ACE.1))
+
 Med_ACE1 <-median(na.omit(GrandSlam$ACE.1))
 Med_ACE2 <- median(na.omit(GrandSlam$ACE.2))
 GrandSlam$ACE.1 <- ifelse(is.na(GrandSlam$ACE.1),Med_ACE1,GrandSlam$ACE.1)
@@ -623,27 +677,48 @@ GrandSlam$ACE.2 <- ifelse(is.na(GrandSlam$ACE.2),Med_ACE1,GrandSlam$ACE.2)
 Similarly DBF NA values are MCAR, we can fill them by median value of DBF.1 and DBF.2. Median of DBF.1 and DBF.2 are `r median(na.omit(GrandSlam$DBF.1))` and `r median(na.omit(GrandSlam$DBF.2))`.
 
 ```{r NA_5, echo=FALSE, warning=FALSE}
+GrandSlam %>%
+  filter(is.na(DBF.1))
+
 Med_DBF1 <-median(na.omit(GrandSlam$DBF.1))
 Med_DBF2 <- median(na.omit(GrandSlam$DBF.2))
 GrandSlam$DBF.1 <- ifelse(is.na(GrandSlam$DBF.1),Med_ACE1,GrandSlam$DBF.1)
 GrandSlam$DBF.2 <- ifelse(is.na(GrandSlam$DBF.2),Med_ACE1,GrandSlam$DBF.2)
 ```
 
-UFE and WNR NA observations belong the same rows. Those NA values are in male US Open tournament. There is no UFE and WNR observation for male US open tournament. This is Missing at Random mechanism. Rows that has NA UFE and WNR values removed from data set because this variables can be effective to result and removing the column may not be good idea.
+UFE and WNR NA observations belong the same rows. Those NA values are in male US Open tournament. There is no UFE and WNR observation for male US open tournament. This Missin at Random mechanism. Rows that has NA UFE and WNR values removed from data set because this variables can be effective to result and removing the column may not be good idea.
 
 ```{r NA_6, echo=FALSE, warning=FALSE}
+GrandSlam %>%
+  filter(is.na(UFE.1))
+
 GrandSlam <- GrandSlam %>%
   filter(!is.na(UFE.1))
 ```
 
 ```{r NA_7, echo=FALSE, warning=FALSE}
+GrandSlam %>%
+  filter(is.na(UFE.1))
+
 GrandSlam <- GrandSlam %>%
   filter(!is.na(UFE.1))
 ```
 
-After removing NA UFE and WNR values, There are 46 and 45 NA values for NPA and NPW are MCAR case because there is no any pattern. Those NA values can be filled by median of NPA and NPW values.
+After removing NA UFE and WNR values number of NA values are like below.
+
+```{r NA_8, echo=FALSE, warning=FALSE}
+na_columns <- GrandSlam %>%
+  select_if(~ any(is.na(.)))
+
+colSums(is.na(na_columns))
+```
+
+46 and 45 NA values for NPA and NPW are MCAR case because there is no any . Those NA values can be filled by median of NPA and NPW values.
 
 ```{r NA_9, echo=FALSE, warning=FALSE}
+GrandSlam %>%
+  filter(is.na(NPA.1))
+
 Med_NPA1 <-median(na.omit(GrandSlam$NPA.1))
 Med_NPA2 <- median(na.omit(GrandSlam$NPA.2))
 GrandSlam$NPA.1 <- ifelse(is.na(GrandSlam$NPA.1),Med_ACE1,GrandSlam$NPA.1)
@@ -655,7 +730,7 @@ GrandSlam$NPW.1 <- ifelse(is.na(GrandSlam$NPW.1),Med_ACE1,GrandSlam$NPW.1)
 GrandSlam$NPW.2 <- ifelse(is.na(GrandSlam$NPW.2),Med_ACE1,GrandSlam$NPW.2)
 ```
 
-There are 312 NA values for total points win (TPW) observations. As seen in the bar graphs, when player's TPW is greater than oppenent player, this player wins the match, it is almost like result. Therefore TPW is totaly dependent to result. TPW variable should be removed from data set. Similarly, FNL is directly give the result, so we should remove FNL variables too.
+There are 312 NA values for total points win (TPW) observations. As seen in the bar graphs, when player's TPW is greater than oppenent player, this player wins the match, it is almost like result. Therefore TPW is totaly dependent to result. TPW variable should be removed from data set. Similarly FNL is directly give the result, so we should remove FNL variables too.
 
 ```{r NA_10, echo=FALSE, warning=FALSE}
 GrandSlam %>%
@@ -665,11 +740,27 @@ GrandSlam %>%
   labs(title = "Results when TPW.2 greater than TPW.1")+
   theme_bw()
 
+GrandSlam %>%
+  filter(TPW.1>TPW.2)%>%
+  ggplot(aes(x=RESULT,fill = RESULT))+
+  geom_bar()+
+  labs(title = "Results when TPW.1 greater than TPW.2")+
+  theme_bw()  
+  
 GrandSlam <- GrandSlam %>%
   select(-c(TPW.1,TPW.2,FNL.1,FNL.2))
 ```
 
-Set scores (ST) are similar to TPW, if we know 2 players set score, match result can be known. Therefore ST values should be removed from data set. However, number of total game (TG) variable can be created from sum of all ST values for each row. Number of total game can be use for standardize the match statistics. For example we can find number of ace per game from ACE.1 over number of total game. So, after created TG, all ST values can be removed. FSW, SSW, ACE, DBF, WNR, UFE, BPC, BPW, NPA, NPW variables are divided to TG to standardize match statistics.
+After TPW remove from data set, number of NA values are like below.
+
+```{r NA_11, echo=FALSE, warning=FALSE}
+na_columns <- GrandSlam %>%
+  select_if(~ any(is.na(.)))
+
+colSums(is.na(na_columns))
+```
+
+Set scores (ST) are similar to TPW, if we know 2 players set score, match result can be known. Therefore ST values should be removed from data set. However, number of total game (TG) variable can be created from sum of all ST values for each row. Number of total game can be use for standardize the match statistics. For example we can find avarage number of ace for 1 game from ACE.1 over number of total game. So, after created TG, all ST values can be removed. FSW, SSW, ACE, DBF, WNR, UFE, BPC, BPW, NPA, NPW variables are divided to TG to standartize match statistics.
 
 ```{r NA_12, echo=FALSE, warning=FALSE}
 GrandSlam$TG <- rowSums(GrandSlam[, c("ST1.1", "ST2.1", "ST3.1", "ST4.1","ST5.1",
@@ -697,11 +788,15 @@ GrandSlam <- GrandSlam %>%
 
 After missing data cleaning and imputation, we have `r dim(GrandSlam)[1]` observations and `r dim(GrandSlam)[2]` variables.
 
+```{r NA_14, echo=FALSE, warning=FALSE}
+summary(GrandSlam)
+```
+
 ## Statistical Modelling
 
 ### Train-Test Data Set Preparation
 
-GrandSlam data set splited by 20% test and 80% training by random selection. Before modelling, numeric variables in the train and test data set should be scaled. Firstly, train set is scaled and then, by using train set mean and standart deviation test set should be scaled too. Test and train sets are scaled after splitting, because, test observations should not be effect anything on the train data set in order to maintain integrity of model evaluation.
+GrandSlam data set splited by 20% test and 80% training by random selection. Before modelling, numeric variables in the train and test data set should be scaled. Firstly, train set is scaled and then, by using train set mean and standart deviation test set should be scaled too. Test and train sets are scaled after splitting, because, test observations should not be effect anything on the train data set in order to maintain integrity of model evaluation. After scale the train data set summary is like below.
 
 ```{r train_test, echo=FALSE, warning=FALSE}
 set.seed(25)
@@ -732,82 +827,34 @@ test_numeric_standardized <- scale(test_numeric, center = train_mean, scale = tr
 # Combine standardized predictors with the response variable
 GrandSlam_trn_std <- data.frame(train_numeric_standardized, train_other)
 GrandSlam_tst_std <- data.frame(test_numeric_standardized, test_other)
+
+summary(GrandSlam_trn_std)
 ```
 
 ### Logistic Regression
-
-Logistic regression is used to predict the RESULT of the tennis matches on this project. As a cross validation method, k-fold cv is used for k equals 10. This cv is made by using "caret" package in r. Our dependent variable should be binary. So, RESULT is binary with 1 or 2.
-
-Independence: predictors should be independent from eachother, We can check that by checking correlation between numeric predictors. As seen on the correlation plot. There are high correlation between NPW and NPA, BPC and BPW, FSP and SSP. So, NPW, BPW and SSP variables are removed from data set.
-
-```{r corr, echo=FALSE, warning=FALSE}
-# Compute Pearson correlation coefficients
-numeric_var <- GrandSlam_trn_std %>%
-  select(c(NPW.1,NPA.1,NPW.2,NPA.2,BPC.1 ,BPW.1,BPC.2 ,BPW.2,FSP.1, SSP.1,FSP.2, SSP.2))
-correlation_matrix <- cor(numeric_var,use = "complete.obs")
-
-# Print correlation matrix
-corrplot(correlation_matrix, method = "number", type = "upper", tl.col = "black", tl.srt = 45)
-GrandSlam_trn_std <- GrandSlam_trn_std %>%
-  select(-c(NPW.1,NPW.2,BPW.1,BPW.2, SSP.1, SSP.2))
-GrandSlam_tst_std <- GrandSlam_tst_std %>%
-  select(-c(NPW.1,NPW.2,BPW.1,BPW.2, SSP.1, SSP.2))
-```
-
-Now, logistic regression can be applied.
-
-FSW, SSW and BPC statistics are more effective than other to predict winner. Also, p-values show that FSW, SSW and BPC are highly significant predictors. FSW and BPC influence can be seen in EDA part too. That shows that, player can practice more serve shoots to increase the win rate. Also, model indicate that breaking the opponent serve with fast shoots is really effective on win rate.
-
-On the other hand, ACE.1 and UFE.2 seems marginally significant and can be effective to predict result.
 
 ```{r logistic, echo=FALSE, warning=FALSE}
 train_control <- trainControl(method = "cv", number = 10, savePredictions = "final")
 
 log_model <- train(RESULT ~ ., data = GrandSlam_trn_std, method = "glm",family=binomial,
                       trControl = train_control)
-
-log_model_1<-log_model$finalModel
 summary(log_model)
-```
-
-You can find vif matrix of logistic regression at appendix b, There are no higher than 10 vif value. So, there is no highly correlated variables that lead multicollinearity. There is confusion matrix for test data and performance statistics for test and train data. Accuracy is 0.9 for test data which is acceptable and effective result. However, train data has 0.95 accuracy because logistic regression model made by train data. So, there are some overfitting. Other performance parameters are good as well. Other train data performance parameter are greater than test data too.
-
-```{r log_performance, echo=FALSE, warning=FALSE}
 # Extract the final predictions from the cross-validation
-train_pred<-predict(log_model, newdata = GrandSlam_trn_std)
-test_pred <- predict(log_model, newdata = GrandSlam_tst_std)
+train_predict<-predict(log_model, newdata = GrandSlam_trn_std)
+Train_pred <- log_model$pred$pred
+
+Test_pred <- predict(log_model, newdata = GrandSlam_tst_std)
+accuracy <- mean(Test_pred == GrandSlam_tst_std$RESULT)
+print(paste("Accuracy:", accuracy))
+
+mod<-log_model$finalModel
+exp(coef(mod))
 
 # Create confusion matrix
-conf_matrix <- confusionMatrix(test_pred, GrandSlam_tst_std$RESULT)
-kable(conf_matrix$table,caption = "Confusion Table of Test Data")
-
-# Extract performance metrics
-accuracy <- conf_matrix$overall['Accuracy']
-precision <- conf_matrix$byClass['Pos Pred Value']
-recall <- conf_matrix$byClass['Sensitivity']
-f1_score <- 2 * (precision * recall) / (precision + recall)
-
-# Create a performance table
-performance_table <- data.frame(
-  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
-  Value = c(accuracy, precision, recall, f1_score))
-
-kable(performance_table,  caption = "Test data Performance of Logistic Regression")
-
-conf_matrix2 <- confusionMatrix(train_pred, GrandSlam_trn_std$RESULT)
-
-# Extract performance metrics
-accuracy2 <- conf_matrix2$overall['Accuracy']
-precision2 <- conf_matrix2$byClass['Pos Pred Value']
-recall2 <- conf_matrix2$byClass['Sensitivity']
-f1_score2 <- 2 * (precision2 * recall2) / (precision2 + recall2)
-
-# Create a performance table
-performance_table2 <- data.frame(
-  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
-  Value = c(accuracy2, precision2, recall2, f1_score2))
-
-kable(performance_table2,  caption = "Train data Performance of Logistic Regression")
+conf_matrix <- confusionMatrix(Test_pred, GrandSlam_tst_std$RESULT)
+conf_matrix2 <- confusionMatrix(train_predict, GrandSlam_trn_std$RESULT)
+# Print the confusion matrix
+print(conf_matrix2)
 ```
 
 ### Support Vector Machine Modeling
@@ -832,46 +879,4 @@ conf_matrix <- confusionMatrix(Test_pred, GrandSlam_tst_std$RESULT)
 
 # Print the confusion matrix
 print(conf_matrix)
-```
-
-## APPENDİCES
-
-### APPENDİX A {#appendix-a}
-
-| Name of Variable | Definition of Variable                                                                             |
-|--------------------------|----------------------------------------------|
-| Player 1         | Name of Player 1 (Nominal)                                                                         |
-| Player 2         | Name of Player 2 (Nominal)                                                                         |
-| Round            | Round of the tourneament (Nominal Ordinal) (1: 1st elimination round, 7: Final of the tournament ) |
-| Result           | Result of the match (0/1) - Referenced on Player 1 is Result = 1 (Nominal)                         |
-| FSP.1 and .2     | First Serve Percentage for player 1 (if .2, player 2) (Integer)                                    |
-| FSW.1 and .2     | First Serve Won by player 1 (if .2, player 2) (Integer)                                            |
-| SSP.1 and .2     | Second Serve Percentage for player 1 (if .2, player 2) (Integer)                                   |
-| SSW.1 and .2     | Second Serve Won by player 1 (if .2, player 2) (Integer)                                           |
-| ACE.1 and .2     | Aces won by player 1 (if .2, player 2) (Integer)                                                   |
-| DBF.1 and .2     | Double Faults committed by player 1 (if .2, player 2) (Integer)                                    |
-| WNR.1 and .2     | Winners earned by player 1 (if .2, player 2) (Integer)                                             |
-| UFE.1 and .2     | Unforced Errors committed by player 1 (if .2, player 2) (Integer)                                  |
-| BPC.1 and .2     | Break Points Created by player 1 (if .2, player 2) (Integer)                                       |
-| BPW.1 and .2     | Break Points Won by player 1 (if .2, player 2) (Integer)                                           |
-| NPA.1 and .2     | Net Points Attempted by player 1 (if .2, player 2) (Integer)                                       |
-| NPW.1 and .2     | Net Points Won by player 1 (if .2, player 2) (Integer)                                             |
-| TPW.1 and .2     | Total Points Won by player 1 (if .2, player 2) (Integer)                                           |
-| ST1.1 and .2     | Set 1 result for Player 1 (if .2, player 2) (Integer)                                              |
-| ST2.1 and .2     | Set 2 Result for Player 1 (if .2, player 2) (Integer)                                              |
-| ST3.1 and .2     | Set 3 Result for Player 1 (if .2, player 2) (Integer)                                              |
-| ST4.1 and .2     | Set 4 Result for Player 1 (if .2, player 2) (Integer)                                              |
-| ST5.1 and .2     | Set 5 Result for Player 1 (if .2, player 2) (Integer)                                              |
-| FNL.1 and .2     | Final Number of Games Won by Player 1 (if .2, player 2) (Integer)                                  |
-| tournament       | Tournament name                                                                                    |
-| gender           | Tournament gender                                                                                  |
-
-: Variable Name and Definition
-
-### APPENDİX B
-
-VIF matrix of logistic regression:
-
-```{r vif, echo=FALSE}
-vif(log_model_1)
 ```
