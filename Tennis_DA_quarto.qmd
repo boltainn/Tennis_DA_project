@@ -1,6 +1,8 @@
 ---
 title: "2013 Grand Slams Tennis Data Analysis and Modelling"
-format: html
+format:
+  html:
+    code-fold: true
 editor: visual
 toc: true
 toc-title: "Table Of Contents"
@@ -8,7 +10,7 @@ toc-depth: 3
 toc-location: left
 ---
 
-```{r library, include=FALSE}
+```{r library,include=FALSE}
 library(knitr)
 library(tidyverse)
 library(ggplot2)
@@ -18,6 +20,11 @@ library(caret)
 library(e1071)
 library(glmnet)
 library(corrplot)
+library(car)
+library(pROC)
+library(randomForest)
+library(neuralnet)
+library(nnet)
 ```
 
 ## 1. Brief Statement of the aim of the project
@@ -26,7 +33,7 @@ In this project, data is 4 different tennis singles 2013 grand slams match stati
 
 ## 2. Source of the data variables, dependent variable
 
-```{r combine_DF, include=FALSE}
+```{r combine_DF}
 ## Getting data
 AusOpenMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/AusOpen-men-2013.csv")
 AusOpenWoMen <- read.csv("https://raw.githubusercontent.com/boltainn/Tennis_DA_project/main/AusOpen-women-2013.csv")
@@ -106,13 +113,13 @@ Source of the data is [UC Irvine Machine Learning Repository](https://archive.ic
 
 Check variables and data types:
 
-```{r structure, echo=FALSE}
-kable(str(GrandSlam))
+```{r structure}
+str(GrandSlam)
 ```
 
 Character values, "Round" and "Result" should be a factor. And name of the variables should be all upper or lower letter. So, all names of variables changed to upper letter.
 
-```{r upper, echo=FALSE}
+```{r upper}
 ## Change all varaiable names to upper letter
 colnames(GrandSlam) <- toupper(colnames(GrandSlam))
 ```
@@ -121,14 +128,14 @@ Before change character values, "Round" and "Result" to factor let's check head 
 
 Head and tail of the data:
 
-```{r head_tail, echo=FALSE}
+```{r head_tail}
 kable(head(GrandSlam), label = "Head of the data")
 kable(tail(GrandSlam),label = "Tail of the data")
 ```
 
 As seen on the "PLAYER1" and "PLAYER2", there is problem about how player names saved to data. In some rows player names saved as full name (first name + surname). However, in other rows, player names saved as shortened way like "M.Bartolli". This problem fixed by convert all names shortened.
 
-```{r convert_player, include=FALSE}
+```{r convert_player}
 #Function that shortened names as like "M.Bartolli"
 convert_player_name <- function(player_name){
   name_parts <- strsplit(player_name, " ")[[1]]
@@ -216,12 +223,11 @@ fixed2 <- sapply(GrandSlam$PLAYER2,fixed_name)
 GrandSlam$PLAYER1 <- fixed1
 GrandSlam$PLAYER2 <- fixed2
 all_player=c(GrandSlam$PLAYER1,GrandSlam$PLAYER2)
-length(unique(all_player))
 ```
 
 After fixed player names, there is `r length(unique(all_player))` player on this data set.
 
-```{r head_tail2, echo=FALSE}
+```{r head_tail2}
 kable(head(GrandSlam), label = "Head of the data")
 kable(tail(GrandSlam),label = "Tail of the data")
 ```
@@ -230,7 +236,7 @@ As seen on the head and tail of the data, data seems well tabulated data. There 
 
 Now character values, "Round" and "Result" can be changed to factor. And finalize structure of the data is below:
 
-```{r factorize, echo=FALSE}
+```{r factorize}
 ## Change 'Result' value for player-1 1 and player-2 2:
 GrandSlam$RESULT <- ifelse(GrandSlam$RESULT==0, 2,1)
 ## Convert variables to factor
@@ -245,7 +251,7 @@ str(GrandSlam)
 
 Also there is problem about BPC(Break Points Created) and BPW(Break Points Win). Logically, BPC must be greater or equal to BPW but in some rows BPC is lower than BPW like below example. This fixed by exchanging BPC values by BPW and BPW values by BPC when BPW \> BPC.
 
-```{r BPC_BPW_problem, echo=FALSE}
+```{r BPC_BPW_problem}
 cond<-which(GrandSlam$BPW.1>GrandSlam$BPC.1)
 head(GrandSlam[cond,c("BPC.1","BPW.1","BPC.2","BPW.2")])
 
@@ -269,7 +275,7 @@ for(i in 1:length(GrandSlam$PLAYER1)){
 
 There are similar problems with NPA and NPW for Aus open and French Open tournaments, NPA should be greater or equal to NPW. This fixed by exchanging NPA values by NPW and NPW values by NPA when NPW \> NPA.
 
-```{r NPA_NPW_problem, echo=FALSE}
+```{r NPA_NPW_problem}
 cond<-which(GrandSlam$NPW.1>GrandSlam$NPA.1)
 head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")])
 
@@ -293,7 +299,7 @@ for(i in 1:length(GrandSlam$PLAYER1)){
 
 After fix the problem, all BPC values are greater than BPW. Same for NPA and NPW.
 
-```{r BPC_BPW_new, echo=FALSE}
+```{r BPC_BPW_new}
 head(GrandSlam[cond,c("BPC.1","BPW.1","BPC.2","BPW.2")])
 head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")])
 ```
@@ -304,7 +310,7 @@ head(GrandSlam[cond,c("NPA.1","NPW.1","NPA.2","NPW.2")])
 
 Below there are frequency tables for tournament, round, result and gender. Ausopen and French open tournaments have most number of match. Also, as expected most matches played at round 1. Number of male matches are greater than female matches. Moreover, Most round 1 matches played at US open, but at the remaining round US Open matches are not much when considering other tournaments. There can be incomplete data for US Open.
 
-```{r freq_table, echo=FALSE}
+```{r freq_table}
 ## Frequency table for categorical
 kable(table(GrandSlam$TOURNAMENT),col.names = c('Tournament','Freq'))
 kable(table(GrandSlam$ROUND),col.names = c('Round','Freq'))
@@ -316,28 +322,8 @@ kable(table(GrandSlam$TOURNAMENT,GrandSlam$ROUND))
 
 Summary statistics for numeric variables are below. Avarage performances are almost equal for player 1 and player 2 statistics. Avarage performance of tennis players can be seen in this summary statistics.
 
-```{r summary, echo=FALSE}
-sum1<-GrandSlam %>%
-  select(PLAYER1,PLAYER2)
-sum2 <-GrandSlam %>% 
-  select(FSP.1,FSP.2,FSW.1,FSW.2 )
-sum3 <-GrandSlam %>% 
-  select(SSP.1,SSP.2,SSW.1,SSW.2 )
-sum4 <-GrandSlam %>% 
-  select(ACE.1,ACE.2,DBF.1,DBF.2)
-sum5 <-GrandSlam %>% 
-  select(WNR.1,WNR.2, UFE.1,UFE.2)
-sum6 <-GrandSlam %>% 
-  select(BPC.1,BPC.2,BPW.1,BPW.2)
-sum7 <-GrandSlam %>% 
-  select(NPA.1,NPA.2,NPW.1,NPW.2,TPW.1,TPW.2 )
-summary(sum1)
-summary(sum2)
-summary(sum3)
-summary(sum4)
-summary(sum5)
-summary(sum6)
-summary(sum7)
+```{r summary}
+kable(summary(GrandSlam))
 ```
 
 Also, set result summary is like below, as seen, there are a lot of NA values for ST4 and ST5 especially. This is because most of the match is not last to 5 or 4 set. It is over in 2 or 3 sets.
@@ -345,10 +331,7 @@ Also, set result summary is like below, as seen, there are a lot of NA values fo
 ```{r set_sum}
 sum8 <-GrandSlam %>% 
   select(ST1.1,ST2.1,ST3.1,ST4.1,ST5.1)
-sum9 <-GrandSlam %>% 
-  select(ST1.2,ST2.2,ST3.2,ST4.2,ST5.2)
 summary(sum8)
-summary(sum9)
 ```
 
 ### Research Questions
@@ -357,7 +340,7 @@ summary(sum9)
 
 As seen in the scatter plot, there is correlation between result and break points win. If player has more break points than opponent player, then, player that has more BPW and BPC probably win the match.
 
-```{r EDA_1, echo=FALSE, warning=FALSE}
+```{r EDA_1, warning=FALSE}
 GrandSlam %>%
   ggplot(aes(x=BPW.1,y=BPW.2,fill = RESULT,colour=RESULT))+
   geom_point()+
@@ -374,7 +357,9 @@ GrandSlam %>%
 
 Hypothesis t-test can be conduct to show avarage BPC or BPW is greater for winning player.
 
-```{r CDA_1, echo=FALSE, warning=FALSE}
+```{r CDA_1, warning=FALSE}
+## Normality Test Ekle
+
 BPC.1.P1win <- GrandSlam %>%
   filter(RESULT==1) %>%
   select(BPC.1)
@@ -390,7 +375,7 @@ print(t_test_BPC)
 
 H0 is BPC.1 is equal or less than BPC.2 for RESULT is equals 1. H1 is BPC.1 is greater than BPC.2 for RESULT is equals 1. From t test confidence interval is `r t_test_BPC$conf.int` to infinite. So we can reject null hypothesis. Mean of BPC.1 is greater than mean of BPC.2 for RESULT equals 1. Similarly, mean of BPW.1 is greater than mean of BPW.2 for RESULT equals 1 according to t-test.
 
-```{r CDA_1_, echo=FALSE, warning=FALSE}
+```{r CDA_1_, warning=FALSE}
 BPC.1.P1win <- GrandSlam %>%
   filter(RESULT==1) %>%
   select(BPC.1)
@@ -418,7 +403,7 @@ print(t_test_BPW)
 
 This situation is valid for RESULT equals 2 too.
 
-```{r CDA_1_2, echo=FALSE, warning=FALSE}
+```{r CDA_1_2, warning=FALSE}
 BPC.2.P2win <- GrandSlam %>%
   filter(RESULT==2) %>%
   select(BPC.2)
@@ -448,7 +433,7 @@ print(t_test_BPW)
 
 As seen on the density plot, when player win the match, player's first serve percentage is increase. Therefore, first serve percentage can be effective for winning the match. Similarly, box plot of FSP show that winner player has more FSW than loser one. So, having more FSW can effect the result.
 
-```{r FSP_dens, echo=FALSE, warning=FALSE}
+```{r FSP_dens, warning=FALSE}
 GrandSlam %>%
   ggplot(aes(x=FSP.1,fill = "blue"))+
   geom_density(alpha = 0.4,fill = "blue")+
@@ -472,7 +457,7 @@ GrandSlam %>%
 
 For confirmatory data analysis for this reasearch question, two paired t-test can be conduct too. As seen on the t-test result, mean of FSP.1 is changed significantly when result change.
 
-```{r CDA_2, echo=FALSE, warning=FALSE}
+```{r CDA_2, warning=FALSE}
 winning_player1 <- GrandSlam[GrandSlam$RESULT == 1, ]
 winning_player2 <- GrandSlam[GrandSlam$RESULT == 2, ]
 
@@ -493,7 +478,7 @@ print(t_test_fsw1)
 
 t-tests for FSP.2 and FSW.2 are like FSP.1 and FSP.2
 
-```{r CDA_2_2, echo=FALSE, warning=FALSE}
+```{r CDA_2_2, warning=FALSE}
 # Conduct two-sample t-tests for FSP
 fsp2_P1win <- winning_player1$FSP.2
 fsp2_P2win <- winning_player2$FSP.2
@@ -513,7 +498,7 @@ print(t_test_fsw2)
 
 On this part, ACE variable is created by summing of ACE.1 and ACE.2. Similarly other variables are summing and total of player 1 and player 2 statistic variables are created. Aim of this research is investigating effect of different tournament on player performance. Each tournament have different surface type so this should be effect the match statistics. As seen in the boxplots, at French open tournament, players do less ace than other tounaments. Clay surface (French open surface) can lead to this, because clay surface slow down the ball. Also, in the boxplot of DBF, we can say that players do more double foul at the US and AUS open tournaments. Both tournaments has hard surfaces. Additionally, there is significant diffrence on male and female statistics for ACE, male can do more ACE than womwn according to this graph but number of sets are not same for male and female matches. Female matches are best of 3, but male matches are best of 5. So, this can be reason for that.
 
-```{r EDA_3, echo=FALSE, warning=FALSE}
+```{r EDA_3, warning=FALSE}
 GrandSlam <- GrandSlam %>%
   mutate(TPW=TPW.1+TPW.2,FSW=FSW.1+FSW.2,
         SSW=SSW.1+SSW.2,ACE=ACE.1+ACE.2,DBF=DBF.1+DBF.2, WNR=WNR.1+WNR.2,
@@ -535,7 +520,7 @@ ggplot(GrandSlam,aes(y=DBF,fill=TOURNAMENT))+
 
 With analysis of variance (ANOVA) for DBF and ACE, We can see there are significant difference between tournaments and gender for 0.05 significance level.
 
-```{r CDA_3, echo=FALSE, warning=FALSE}
+```{r CDA_3, warning=FALSE}
 # Conduct ANOVA for DBF
 anova_dbf <- aov(DBF ~ TOURNAMENT + GENDER, data = GrandSlam)
 print("ANAVO of DBF")
@@ -552,7 +537,7 @@ summary(anova_ace)
 
 NPA and NPW has right skewed distribution for each round except 7th round, but in 7th round we have 8 observation so it can mislead the interpretation of this plot for 7th round. Therefore player NPA and NPW performances are similar for all rounds except 7th.
 
-```{r EDA_4,echo=FALSE, warning=FALSE}
+```{r EDA_4, warning=FALSE}
 ggplot(GrandSlam,aes(y=NPA,x=ROUND,fill = ROUND))+
   geom_violin()+
   ggtitle("Violin Plot of NPA for each Round")+
@@ -566,7 +551,7 @@ ggplot(GrandSlam,aes(y=NPW,x=ROUND,fill = ROUND))+
 
 Again by using ANOVA, we can show there is significant difference or not in NPW and NPA. As seen in ANOVA, for 0.05 significance level, there is no significant difference between NPA and NPW observations of different rounds.
 
-```{r CDA_4, echo=FALSE, warning=FALSE}
+```{r CDA_4, warning=FALSE}
 # Conduct ANOVA for NPA
 anova_NPA <- aov(NPA ~ ROUND, data = GrandSlam)
 print("ANAVO of NPA")
@@ -581,7 +566,7 @@ summary(anova_NPW)
 
 As seen on bubble plot, whwn BPC increase, TPW increase because when player break the opponent player serve, match can be extend. Also number of first serve win tend to increase when TPW and BPC increase.
 
-```{r EDA_5, echo=FALSE, warning=FALSE}
+```{r EDA_5, warning=FALSE}
 ggplot(GrandSlam,aes(x=TPW,y=BPC,size = FSW))+
   geom_point(colour = "purple", alpha = 0.4)+
   labs(title="Scatter plot of TPW vs BPC size by FSW")+
@@ -590,7 +575,7 @@ ggplot(GrandSlam,aes(x=TPW,y=BPC,size = FSW))+
 
 For CDA, we can check correlations between BPC, TPW and FSW. As seen on correlation plot, 
 
-```{r CDA_5, echo=FALSE, warning=FALSE}
+```{r CDA_5, warning=FALSE}
 
 # Compute Pearson correlation coefficients
 correlation_matrix <- cor(GrandSlam[,c("BPC", "TPW", "FSW")],use = "complete.obs")
@@ -601,7 +586,7 @@ corrplot(correlation_matrix, method = "number", type = "upper", tl.col = "black"
 
 Also, checking p values of correlation test show that there is significant correlation between BPC, TPW and FSW for 0.05 significance level.
 
-```{r CDA_5_2, echo=FALSE, warning=FALSE}
+```{r CDA_5_2, warning=FALSE}
 #correlation test
 n <- nrow(GrandSlam)
 p_values <- cor.test(GrandSlam$BPC, GrandSlam$TPW, method = "pearson", n = n)$p.value
@@ -620,23 +605,11 @@ GrandSlam <- GrandSlam %>%
          NPW))
 ```
 
-#### Is there any relationship between player 1 statistics? And Player 2 too?
-
-```{r EDA_6, echo=FALSE, warning=FALSE}
-# Compute Pearson correlation coefficients
-numereic_var <- GrandSlam %>%
-  select(c(SSP.1,SSW.1,FSP.1,FSW.1))
-correlation_matrix <- cor(numereic_var,use = "complete.obs")
-
-# Print correlation matrix
-corrplot(correlation_matrix, method = "number", type = "upper", tl.col = "black", tl.srt = 45)
-```
-
 ## 5. Missing Observation Cleaning, Imputation and Data Manipulation
 
 Firstly, we should find NA values. As we look at the number of NA observations of variables that include NA (below), we can see there are `r sum(is.na(GrandSlam))` NA values
 
-```{r NA_1, echo=FALSE, warning=FALSE}
+```{r NA_1, warning=FALSE}
 na_columns <- GrandSlam %>%
   select_if(~ any(is.na(.)))
 
@@ -645,7 +618,7 @@ colSums(is.na(na_columns))
 
 For, FNL.1 and FNL.2 NA values are because of cancelled match. At the [link](https://www.tennisabstract.com/cgi-bin/wplayer-classic.cgi?p=AlizeCornet&f=A2014qqC2), you can see this match (date 13.01.2014) is cancelled. This row is removed from data set.
 
-```{r NA_2, echo=FALSE, warning=FALSE}
+```{r NA_2, warning=FALSE}
 GrandSlam %>%
   filter(is.na(FNL.1))
 
@@ -655,7 +628,7 @@ GrandSlam <- GrandSlam %>%
 
 After removing the row that FNL values NA:
 
-```{r NA_3, echo=FALSE, warning=FALSE}
+```{r NA_3, warning=FALSE}
 na_columns <- GrandSlam %>%
   select_if(~ any(is.na(.)))
 
@@ -664,49 +637,37 @@ colSums(is.na(na_columns))
 
 There is 22 NA in ACE.1 and ACE.2 columns at same observations, this is MCAR type missing observations, we can fill this values by median value of ACE. Median of ACE.1 and ACE.2 are `r median(na.omit(GrandSlam$ACE.1))` and `r median(na.omit(GrandSlam$ACE.2))`.
 
-```{r NA_4, echo=FALSE, warning=FALSE}
-GrandSlam %>%
-  filter(is.na(ACE.1))
-
+```{r NA_4, warning=FALSE}
 Med_ACE1 <-median(na.omit(GrandSlam$ACE.1))
 Med_ACE2 <- median(na.omit(GrandSlam$ACE.2))
 GrandSlam$ACE.1 <- ifelse(is.na(GrandSlam$ACE.1),Med_ACE1,GrandSlam$ACE.1)
-GrandSlam$ACE.2 <- ifelse(is.na(GrandSlam$ACE.2),Med_ACE1,GrandSlam$ACE.2)
+GrandSlam$ACE.2 <- ifelse(is.na(GrandSlam$ACE.2),Med_ACE2,GrandSlam$ACE.2)
 ```
 
 Similarly DBF NA values are MCAR, we can fill them by median value of DBF.1 and DBF.2. Median of DBF.1 and DBF.2 are `r median(na.omit(GrandSlam$DBF.1))` and `r median(na.omit(GrandSlam$DBF.2))`.
 
-```{r NA_5, echo=FALSE, warning=FALSE}
-GrandSlam %>%
-  filter(is.na(DBF.1))
-
+```{r NA_5, warning=FALSE}
 Med_DBF1 <-median(na.omit(GrandSlam$DBF.1))
 Med_DBF2 <- median(na.omit(GrandSlam$DBF.2))
-GrandSlam$DBF.1 <- ifelse(is.na(GrandSlam$DBF.1),Med_ACE1,GrandSlam$DBF.1)
-GrandSlam$DBF.2 <- ifelse(is.na(GrandSlam$DBF.2),Med_ACE1,GrandSlam$DBF.2)
+GrandSlam$DBF.1 <- ifelse(is.na(GrandSlam$DBF.1),Med_DBF1,GrandSlam$DBF.1)
+GrandSlam$DBF.2 <- ifelse(is.na(GrandSlam$DBF.2),Med_DBF2,GrandSlam$DBF.2)
 ```
 
-UFE and WNR NA observations belong the same rows. Those NA values are in male US Open tournament. There is no UFE and WNR observation for male US open tournament. This Missin at Random mechanism. Rows that has NA UFE and WNR values removed from data set because this variables can be effective to result and removing the column may not be good idea.
+UFE and WNR NA observations belong the same rows. Those NA values are in male US Open tournament. There is no UFE and WNR observation for male US open tournament. This Missing at Random mechanism. Rows that has NA UFE and WNR values removed from data set because this variables can be effective to result and removing the column may not be good idea.
 
-```{r NA_6, echo=FALSE, warning=FALSE}
-GrandSlam %>%
-  filter(is.na(UFE.1))
-
+```{r NA_6, warning=FALSE}
 GrandSlam <- GrandSlam %>%
   filter(!is.na(UFE.1))
 ```
 
-```{r NA_7, echo=FALSE, warning=FALSE}
-GrandSlam %>%
-  filter(is.na(UFE.1))
-
+```{r NA_7, warning=FALSE}
 GrandSlam <- GrandSlam %>%
   filter(!is.na(UFE.1))
 ```
 
 After removing NA UFE and WNR values number of NA values are like below.
 
-```{r NA_8, echo=FALSE, warning=FALSE}
+```{r NA_8, warning=FALSE}
 na_columns <- GrandSlam %>%
   select_if(~ any(is.na(.)))
 
@@ -715,24 +676,21 @@ colSums(is.na(na_columns))
 
 46 and 45 NA values for NPA and NPW are MCAR case because there is no any . Those NA values can be filled by median of NPA and NPW values.
 
-```{r NA_9, echo=FALSE, warning=FALSE}
-GrandSlam %>%
-  filter(is.na(NPA.1))
-
+```{r NA_9, warning=FALSE}
 Med_NPA1 <-median(na.omit(GrandSlam$NPA.1))
 Med_NPA2 <- median(na.omit(GrandSlam$NPA.2))
-GrandSlam$NPA.1 <- ifelse(is.na(GrandSlam$NPA.1),Med_ACE1,GrandSlam$NPA.1)
-GrandSlam$NPA.2 <- ifelse(is.na(GrandSlam$NPA.2),Med_ACE1,GrandSlam$NPA.2)
+GrandSlam$NPA.1 <- ifelse(is.na(GrandSlam$NPA.1),Med_NPA1,GrandSlam$NPA.1)
+GrandSlam$NPA.2 <- ifelse(is.na(GrandSlam$NPA.2),Med_NPA2,GrandSlam$NPA.2)
 
 Med_NPW1 <-median(na.omit(GrandSlam$NPW.1))
 Med_NPW2 <- median(na.omit(GrandSlam$NPW.2))
-GrandSlam$NPW.1 <- ifelse(is.na(GrandSlam$NPW.1),Med_ACE1,GrandSlam$NPW.1)
-GrandSlam$NPW.2 <- ifelse(is.na(GrandSlam$NPW.2),Med_ACE1,GrandSlam$NPW.2)
+GrandSlam$NPW.1 <- ifelse(is.na(GrandSlam$NPW.1),Med_NPW1,GrandSlam$NPW.1)
+GrandSlam$NPW.2 <- ifelse(is.na(GrandSlam$NPW.2),Med_NPW2,GrandSlam$NPW.2)
 ```
 
-There are 312 NA values for total points win (TPW) observations. As seen in the bar graphs, when player's TPW is greater than oppenent player, this player wins the match, it is almost like result. Therefore TPW is totaly dependent to result. TPW variable should be removed from data set. Similarly FNL is directly give the result, so we should remove FNL variables too.
+There are 312 NA values for total points win (TPW) observations. As seen in the bar graphs, when player's TPW is greater than opponent player, this player wins the match, it is almost like result. Therefore TPW is totaly dependent to result. TPW variable should be removed from data set. Similarly FNL is directly give the result, so we should remove FNL variables too. For alternative modelling of TPW, rows that have NA TPW values are removed and regression data created separately. 
 
-```{r NA_10, echo=FALSE, warning=FALSE}
+```{r NA_10, warning=FALSE}
 GrandSlam %>%
   filter(TPW.2>TPW.1)%>%
   ggplot(aes(x=RESULT,fill = RESULT))+
@@ -746,14 +704,20 @@ GrandSlam %>%
   geom_bar()+
   labs(title = "Results when TPW.1 greater than TPW.2")+
   theme_bw()  
-  
+ 
+## TPW tahmini için regression datası. TPW NA olan rowlar çıkarıldı.
+GrandSlam_Reg <- GrandSlam%>%
+  filter(!is.na(TPW.1))
+GrandSlam_Reg <- GrandSlam_Reg%>%
+  select(-c(FNL.1,FNL.2,RESULT))
+
 GrandSlam <- GrandSlam %>%
   select(-c(TPW.1,TPW.2,FNL.1,FNL.2))
 ```
 
 After TPW remove from data set, number of NA values are like below.
 
-```{r NA_11, echo=FALSE, warning=FALSE}
+```{r NA_11, warning=FALSE}
 na_columns <- GrandSlam %>%
   select_if(~ any(is.na(.)))
 
@@ -762,9 +726,26 @@ colSums(is.na(na_columns))
 
 Set scores (ST) are similar to TPW, if we know 2 players set score, match result can be known. Therefore ST values should be removed from data set. However, number of total game (TG) variable can be created from sum of all ST values for each row. Number of total game can be use for standardize the match statistics. For example we can find avarage number of ace for 1 game from ACE.1 over number of total game. So, after created TG, all ST values can be removed. FSW, SSW, ACE, DBF, WNR, UFE, BPC, BPW, NPA, NPW variables are divided to TG to standartize match statistics.
 
-```{r NA_12, echo=FALSE, warning=FALSE}
+```{r NA_12, warning=FALSE}
 GrandSlam$TG <- rowSums(GrandSlam[, c("ST1.1", "ST2.1", "ST3.1", "ST4.1","ST5.1",
                                        "ST1.2", "ST2.2", "ST3.2", "ST4.2","ST5.2")], na.rm = TRUE)
+
+##Rgression
+GrandSlam_Reg$TG <- rowSums(GrandSlam_Reg[, c("ST1.1", "ST2.1", "ST3.1", "ST4.1","ST5.1",
+                                       "ST1.2", "ST2.2", "ST3.2", "ST4.2","ST5.2")], na.rm = TRUE)
+GrandSlam_Reg <- GrandSlam_Reg %>%
+  select(-c(ST1.1,ST2.1,ST3.1,ST4.1,ST5.1,ST1.2,ST2.2,ST3.2,ST4.2,ST5.2))
+
+
+GrandSlam_Reg <- GrandSlam_Reg %>%
+  mutate(FSW.1 = as.numeric(FSW.1/TG), FSW.2 = as.numeric(FSW.2/TG), SSW.1 = as.numeric(SSW.1/TG),
+         SSW.2=as.numeric(SSW.2/TG),ACE.1 = as.numeric(ACE.1/TG), ACE.2 = as.numeric(ACE.2/TG),
+         DBF.1=as.numeric(DBF.1/TG),DBF.2=as.numeric(DBF.2/TG),WNR.1=as.numeric(WNR.1/TG),
+         WNR.2=as.numeric(WNR.2/TG),UFE.1=as.numeric(UFE.1/TG),BPC.1=as.numeric(BPC.1/TG),
+         BPC.2=as.numeric(BPC.2/TG),BPW.1=as.numeric(BPW.1/TG),BPW.2=as.numeric(BPW.2/TG),
+         NPA.1=as.numeric(NPA.1/TG),NPA.2=as.numeric(NPA.2/TG),NPW.1=as.numeric(NPW.1/TG),
+         NPW.2=as.numeric(NPW.2/TG),TPW.1=TPW.1/TG,TPW.2=TPW.2/TG)
+######
 
 GrandSlam <- GrandSlam %>%
   select(-c(ST1.1,ST2.1,ST3.1,ST4.1,ST5.1,ST1.2,ST2.2,ST3.2,ST4.2,ST5.2))
@@ -781,26 +762,50 @@ GrandSlam <- GrandSlam %>%
 
 There is `r length(unique(c(GrandSlam$PLAYER1,GrandSlam$PLAYER2)))` unique player on this data set. So using players as predictor is not good idea because there are `r length(unique(c(GrandSlam$PLAYER1,GrandSlam$PLAYER2)))` levels, this is not convenient for modeling. Also, our aim in this project is predict result by using player performance like ACE, BPC etc., and show the most important statistics. Because of that PLAYER1 and PLAYER2 columns are removed from data set.
 
-```{r NA_13, echo=FALSE, warning=FALSE}
+```{r NA_13, warning=FALSE}
 GrandSlam <- GrandSlam %>%
+  select(-c(PLAYER1,PLAYER2,TG))
+
+## Regression
+GrandSlam_Reg <- GrandSlam_Reg %>%
   select(-c(PLAYER1,PLAYER2,TG))
 ```
 
 After missing data cleaning and imputation, we have `r dim(GrandSlam)[1]` observations and `r dim(GrandSlam)[2]` variables.
 
-```{r NA_14, echo=FALSE, warning=FALSE}
+```{r NA_14, warning=FALSE}
 summary(GrandSlam)
 ```
 
-## Statistical Modelling
+Also, another grandslam data formed for TPW regression models separetely. This will discuss in regression modeling part.
+
+```{r regression_data_forming}
+GrandSlam_Reg <- GrandSlam_Reg %>%
+  select(-c(NPW.1,NPW.2,BPW.1,BPW.2, SSP.1, SSP.2, TOURNAMENT,ROUND,GENDER))
+colnames(GrandSlam_Reg)
+
+GrandSlam_Reg_1 <- GrandSlam_Reg %>%
+  select(c("FSP.1", "FSW.1", "SSW.1" ,"ACE.1" ,"DBF.1", "WNR.1", "UFE.1", "BPC.1" ,"NPA.1" ,"TPW.1"))
+
+GrandSlam_Reg_2 <- GrandSlam_Reg %>%
+  select(c("FSP.2", "FSW.2", "SSW.2" ,"ACE.2" ,"DBF.2", "WNR.2", "UFE.2", "BPC.2" ,"NPA.2" ,"TPW.2"))
+
+colnames(GrandSlam_Reg_1) <- c("FSP", "FSW", "SSW" ,"ACE" ,"DBF", "WNR", "UFE", "BPC" ,"NPA" ,"TPW")
+colnames(GrandSlam_Reg_2) <- c("FSP", "FSW", "SSW" ,"ACE" ,"DBF", "WNR", "UFE", "BPC" ,"NPA" ,"TPW")
+
+GrandSlam_Reg_final <- rbind(GrandSlam_Reg_1,GrandSlam_Reg_2)
+```
+
+## Classification Statistical Modelling
 
 ### Train-Test Data Set Preparation
 
 GrandSlam data set splited by 20% test and 80% training by random selection. Before modelling, numeric variables in the train and test data set should be scaled. Firstly, train set is scaled and then, by using train set mean and standart deviation test set should be scaled too. Test and train sets are scaled after splitting, because, test observations should not be effect anything on the train data set in order to maintain integrity of model evaluation. After scale the train data set summary is like below.
 
-```{r train_test, echo=FALSE, warning=FALSE}
+```{r train_test, warning=FALSE}
+#creating test training data by considcering distribution of Result
 set.seed(25)
-GrandSlam_idx = sample(nrow(GrandSlam), 653)
+GrandSlam_idx = createDataPartition(GrandSlam$RESULT, p = 0.8, list = FALSE)
 GrandSlam_train = GrandSlam[GrandSlam_idx, ]
 GrandSlam_test = GrandSlam[-GrandSlam_idx, ]
 
@@ -833,50 +838,549 @@ summary(GrandSlam_trn_std)
 
 ### Logistic Regression
 
-```{r logistic, echo=FALSE, warning=FALSE}
-train_control <- trainControl(method = "cv", number = 10, savePredictions = "final")
+Logistic regression is used to predict the RESULT of the tennis matches on this project. As a cross validation method, k-fold cv is used for k equals 10. This cv is made by using "caret" package in r. Our dependent variable should be binary. So, RESULT is binary with 1 or 2.
+
+Independence: predictors should be independent from eachother, We can check that by checking correlation between numeric predictors. As seen on the correlation plot. There are high correlation between NPW and NPA, BPC and BPW, FSP and SSP. So, NPW, BPW and SSP variables are removed from data set.
+
+```{r corr, warning=FALSE}
+# Compute Pearson correlation coefficients
+numeric_var <- GrandSlam_trn_std %>%
+  select(c(NPW.1,NPA.1,NPW.2,NPA.2,BPC.1 ,BPW.1,BPC.2 ,BPW.2,FSP.1, SSP.1,FSP.2, SSP.2))
+correlation_matrix <- cor(numeric_var,use = "complete.obs")
+
+# Print correlation matrix
+corrplot(correlation_matrix, method = "number", type = "upper", tl.col = "black", tl.srt = 45)
+GrandSlam_trn_std <- GrandSlam_trn_std %>%
+  select(-c(NPW.1,NPW.2,BPW.1,BPW.2, SSP.1, SSP.2))
+GrandSlam_tst_std <- GrandSlam_tst_std %>%
+  select(-c(NPW.1,NPW.2,BPW.1,BPW.2, SSP.1, SSP.2))
+```
+
+Now, logistic regression can be applied. Logistic regression find that probability of result equal to 2.
+
+FSW, SSW and BPC statistics are more effective than other to predict winner. Also, p-values show that FSW, SSW and BPC are highly significant predictors. FSW and BPC influence can be seen in EDA part too. That shows that, player can practice more serve shoots to increase the win rate. Also, model indicate that breaking the opponent serve with fast shoots is really effective on win rate. 
+
+On the other hand, WNR and UFE seems marginally significant and can be effective to predict result.
+
+```{r logistic, warning=FALSE}
+#10 k fold cv.
+set.seed(25)
+train_control <- trainControl(method = "cv", number = 10 ,savePredictions = "final")
 
 log_model <- train(RESULT ~ ., data = GrandSlam_trn_std, method = "glm",family=binomial,
                       trControl = train_control)
+
+log_model_1<-log_model$finalModel
 summary(log_model)
+```
+
+Other predictors are not significant, so we can remake the logistic regression with significant predictors. Now all predictors are significant to predict RESULT. FSW is the most effective statistics to win the match. When FSW.1 change one unit, the log odds of the outcome decrease 3.11214 units. This means there is negative relationship between probability of result 2 and FSW.1. Similarly SSW.1, BPC.1, WNR.1 and UFE.2 has negative effect to result equal 2. As expected, FSW.2, SSW.2, BPC.2, WNR.2 and UFE.1 has positive relationship.
+
+```{r logistic2, warning=FALSE}
+log_model <- train(RESULT ~ FSW.1+SSW.1+BPC.1+WNR.1+UFE.1+FSW.2+SSW.2+BPC.2+WNR.2+UFE.2, data = GrandSlam_trn_std, method = "glm",family=binomial,
+                      trControl = train_control)
+log_model1<- log_model$finalModel
+summary(log_model)
+```
+
+You can find vif matrix of logistic regression at appendix b, There are no higher than 10 vif value. So, there is no highly correlated variables that lead multicollinearity. There is confusion matrix for test data and performance statistics for test and train data. Accuracy is 0.9 for test data which is acceptable and effective result. However, train data has 0.95 accuracy because logistic regression model made by train data. So, there are some overfitting. Other performance parameters are good as well. Other train data performance parameter are greater than test data too.
+
+```{r vif}
+vif(log_model1)
+```
+
+```{r log_performance, echo=FALSE, warning=FALSE}
 # Extract the final predictions from the cross-validation
-train_predict<-predict(log_model, newdata = GrandSlam_trn_std)
-Train_pred <- log_model$pred$pred
-
-Test_pred <- predict(log_model, newdata = GrandSlam_tst_std)
-accuracy <- mean(Test_pred == GrandSlam_tst_std$RESULT)
-print(paste("Accuracy:", accuracy))
-
-mod<-log_model$finalModel
-exp(coef(mod))
+train_pred<-predict(log_model, newdata = GrandSlam_trn_std)
+test_pred <- predict(log_model, newdata = GrandSlam_tst_std)
 
 # Create confusion matrix
-conf_matrix <- confusionMatrix(Test_pred, GrandSlam_tst_std$RESULT)
-conf_matrix2 <- confusionMatrix(train_predict, GrandSlam_trn_std$RESULT)
-# Print the confusion matrix
-print(conf_matrix2)
+conf_matrix <- confusionMatrix(test_pred, GrandSlam_tst_std$RESULT)
+# Convert confusion matrix to data frame
+conf_matrix_df <- as.data.frame(conf_matrix$table)
+colnames(conf_matrix_df) <- c("Prediction", "Reference", "Frequency")
+
+# Plotting
+ggplot(conf_matrix_df, aes(Prediction,Reference, fill= Frequency)) +
+        geom_tile() + geom_text(aes(label=Frequency)) +
+        scale_fill_gradient(low="white", high="#009194") +
+        labs(x = "Reference",y = "Prediction") +
+        scale_x_discrete(labels=c("RESULT 1", "RESULT 2")) +
+        scale_y_discrete(labels=c("RESULT 1", "RESULT 2"))+
+        ggtitle("Test Data Confusion Matrix of Logistic Regression")
+
+# Extract performance metrics
+accuracy <- conf_matrix$overall['Accuracy']
+precision <- conf_matrix$byClass['Pos Pred Value']
+recall <- conf_matrix$byClass['Sensitivity']
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a performance table
+performance_table_log <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy, precision, recall, f1_score))
+
+kable(performance_table_log,  caption = "Test data Performance of Logistic Regression")
+
+conf_matrix2 <- confusionMatrix(train_pred, GrandSlam_trn_std$RESULT)
+
+# Extract performance metrics
+accuracy2 <- conf_matrix2$overall['Accuracy']
+precision2 <- conf_matrix2$byClass['Pos Pred Value']
+recall2 <- conf_matrix2$byClass['Sensitivity']
+f1_score2 <- 2 * (precision2 * recall2) / (precision2 + recall2)
+
+# Create a performance table
+performance_table_2 <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy2, precision2, recall2, f1_score2))
+
+kable(performance_table_2,  caption = "Train data Performance of Logistic Regression")
 ```
 
 ### Support Vector Machine Modeling
 
-SVM is used to predict the RESULT of the tennis matches on this project. As a cross validation method, k-fold cv is used for k equals 10. This cv is made by using "caret" package in r.
+SVM is used to predict the RESULT of the tennis matches on this project. As a cross validation method, k-fold cv is used for k equals 10. This cv is made by using "caret" package in r. 
 
-```{r SVM, echo=FALSE, warning=FALSE}
-train_control <- trainControl(method = "cv", number = 10, savePredictions = "final")
+```{r SVM, warning=FALSE}
+## SVM tunning process
+tune_grid <- expand.grid(C = c(0.01,0.1,0.5,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15))
+svm_model <- tune.svm(RESULT ~ .,
+                      data = GrandSlam_trn_std, method = "svmLinear",
+                      cost = c(0.01,0.1,0.5,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15),
+                      cross= 10)
+plot(svm_model)
+best_C <- svm_model[["best.parameters"]][["cost"]]
+svm_model_tuned <- svm(RESULT ~ .,
+                       data = GrandSlam_trn_std,
+                       method = "svmLinear",
+                      cost = best_C, cross= 10)
 
-svm_model <- train(RESULT ~ ., data = GrandSlam_trn_std, method = "svmLinear",
-                      trControl = train_control, tuneGrid = expand.grid(C = 1))
+coefs <- t(svm_model_tuned$coefs) %*% as.matrix(svm_model_tuned$SV)
+order1 <-order(abs(coefs[1,]),decreasing = TRUE)
+kable(coefs[1,order1], col.names = "Coefficient")
 
 # Extract the final predictions from the cross-validation
-Train_pred <- svm_model$pred
-
-Test_pred <- predict(svm_model, newdata = GrandSlam_tst_std)
-accuracy <- mean(Test_pred == GrandSlam_tst_std$RESULT)
-print(paste("Accuracy:", accuracy))
+Train_pred <- predict(svm_model_tuned, newdata = GrandSlam_trn_std)
+Test_pred <- predict(svm_model_tuned, newdata = GrandSlam_tst_std)
 
 # Create confusion matrix
 conf_matrix <- confusionMatrix(Test_pred, GrandSlam_tst_std$RESULT)
+conf_matrix_df <- as.data.frame(conf_matrix$table)
+colnames(conf_matrix_df) <- c("Prediction", "Reference", "Frequency")
 
-# Print the confusion matrix
-print(conf_matrix)
+# Plotting
+ggplot(conf_matrix_df, aes(Prediction,Reference, fill= Frequency)) +
+        geom_tile() + geom_text(aes(label=Frequency)) +
+        scale_fill_gradient(low="white", high="#009194") +
+        labs(x = "Reference",y = "Prediction") +
+        scale_x_discrete(labels=c("RESULT 1", "RESULT 2")) +
+        scale_y_discrete(labels=c("RESULT 1", "RESULT 2"))+
+        ggtitle("Test Data Confusion Matrix of SVM")
+
+# Extract performance metrics
+accuracy <- conf_matrix$overall['Accuracy']
+precision <- conf_matrix$byClass['Pos Pred Value']
+recall <- conf_matrix$byClass['Sensitivity']
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a performance table
+performance_table_svm <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy, precision, recall, f1_score))
+
+kable(performance_table_svm,  caption = "Test data Performance of SVM")
+
+#Training performance
+conf_matrix2 <- confusionMatrix(Train_pred, GrandSlam_trn_std$RESULT)
+
+# Extract performance metrics
+accuracy2 <- conf_matrix2$overall['Accuracy']
+precision2 <- conf_matrix2$byClass['Pos Pred Value']
+recall2 <- conf_matrix2$byClass['Sensitivity']
+f1_score2 <- 2 * (precision2 * recall2) / (precision2 + recall2)
+
+# Create a performance table
+performance_table2 <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy2, precision2, recall2, f1_score2))
+
+kable(performance_table2,  caption = "Train data Performance of SVM")
+
 ```
+
+Cost parameter tuned as`r best_C` after 10 k fold cv. SVM has a `r performance_table_svm$Value[1]` accuracy for test data. Coefficients table shows that BPC and FSW are the most effective statistics to predict match. Also, WNR, SSW and UFE are effective statistics too. Important statistics are like logistic regression. 
+
+### Random Forest Model
+
+Random forest model mtree parameter is tuned with 10 k fold cross validation for 2 to 28 grid. 1000 number of tree used for modeling to reach minimum error. 
+
+``` {r random_f}
+# Train the model using random forest with tuning
+
+rf_model <- train(RESULT ~ ., data = GrandSlam_trn_std, method = "rf", trControl = train_control, tuneLength = 28,ntree=1000)
+best_mtree <- rf_model[["bestTune"]][["mtry"]]
+# Print the model
+
+plot(rf_model)
+plot(rf_model[["finalModel"]][["err.rate"]][,"OOB"],main = "Random Forest Model",xlab = "#Tree", ylab = "OOB Error", type = "l")
+```
+
+After tuning process, mtree tuned as `r best_mtree` considering accuracy. Also, OOB error stabilize after 600-700 trees. Therefore 1000 tree is acceptable for modeling.
+
+```{r rf_conf}
+Train_pred <- predict(rf_model, newdata = GrandSlam_trn_std)
+Test_pred <- predict(rf_model, newdata = GrandSlam_tst_std)
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(Test_pred, GrandSlam_tst_std$RESULT)
+conf_matrix_df <- as.data.frame(conf_matrix$table)
+colnames(conf_matrix_df) <- c("Prediction", "Reference", "Frequency")
+
+# Plotting
+ggplot(conf_matrix_df, aes(Prediction,Reference, fill= Frequency)) +
+        geom_tile() + geom_text(aes(label=Frequency)) +
+        scale_fill_gradient(low="white", high="#009194") +
+        labs(x = "Reference",y = "Prediction") +
+        scale_x_discrete(labels=c("RESULT 1", "RESULT 2")) +
+        scale_y_discrete(labels=c("RESULT 1", "RESULT 2"))+
+        ggtitle("Test Data Confusion Matrix of Random Forest")
+```
+
+```{r rf_performance_test}
+# Extract performance metrics
+accuracy <- conf_matrix$overall['Accuracy']
+precision <- conf_matrix$byClass['Pos Pred Value']
+recall <- conf_matrix$byClass['Sensitivity']
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a performance table
+performance_table_rf <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy, precision, recall, f1_score))
+
+kable(performance_table_rf,  caption = "Test data Performance of Random Forest")
+```
+
+Accuracy of test data is `r conf_matrix$overall['Accuracy']`. Model performed better than svm and logistic regression.
+
+```{r rf_performance_train}
+#Training performance
+conf_matrix2 <- confusionMatrix(Train_pred, GrandSlam_trn_std$RESULT)
+
+# Extract performance metrics
+accuracy2 <- conf_matrix2$overall['Accuracy']
+precision2 <- conf_matrix2$byClass['Pos Pred Value']
+recall2 <- conf_matrix2$byClass['Sensitivity']
+f1_score2 <- 2 * (precision2 * recall2) / (precision2 + recall2)
+
+# Create a performance table
+performance_table2 <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy2, precision2, recall2, f1_score2))
+
+kable(performance_table2,  caption = "Train data Performance of Random Forest")
+```
+
+Variable importance table shows that BPC, FSW and WNR are higly important for predicting result. Also UFE, SSW and ACE is seems to effective. 
+
+```{r random_varImp}
+# Plot variable importance
+var_imp <- varImp(rf_model)[["importance"]]
+var_rows<-row.names(var_imp)
+var_rows <- var_rows[order(var_imp$Overall,decreasing = TRUE)]
+var_imp_df <- data.frame(Variable =var_rows, Impotance = var_imp[order(var_imp$Overall,decreasing = TRUE),])
+kable(var_imp_df,caption = "Variable Importance")
+```
+
+### Artificial Neural Network Model
+
+Neura network with one hidden layer that has 1 node is used to predict Result. There is one hidden layer with one node because, we want to make more interpretable model.
+
+```{r NN_model_tune}
+GrandSlam_trn_std_nn <- GrandSlam_trn_std
+GrandSlam_tst_std_nn <- GrandSlam_tst_std
+
+GrandSlam_trn_std_nn$ROUND <- as.numeric(GrandSlam_trn_std_nn$ROUND)
+GrandSlam_trn_std_nn$TOURNAMENT <- as.numeric(GrandSlam_trn_std_nn$TOURNAMENT)
+GrandSlam_trn_std_nn$GENDER <- as.numeric(GrandSlam_trn_std_nn$GENDER)
+
+GrandSlam_tst_std_nn$ROUND <- as.numeric(GrandSlam_tst_std_nn$ROUND)
+GrandSlam_tst_std_nn$TOURNAMENT <- as.numeric(GrandSlam_tst_std_nn$TOURNAMENT)
+GrandSlam_tst_std_nn$GENDER <- as.numeric(GrandSlam_tst_std_nn$GENDER)
+
+
+# Define a grid for tuning the learning rate (decay parameter)
+tune_grid <- expand.grid(size = 1,  # Number of units in the hidden layer, adjust if necessary
+                         decay = c(0.001, 0.01, 0.1, 0.5, 1,2,3,4,5,6,7,8,9,10))  # Learning rate values to tune
+
+# Train the model using neural network with tuning and cross-validation
+nn_model <- train(RESULT ~ ., data = GrandSlam_trn_std_nn, method = "nnet",
+                  trControl = train_control,
+                  tuneGrid = tune_grid,
+                  linout = FALSE,  # For classification problems
+                  trace = FALSE)  # Do not print the training process
+
+best_lr <- nn_model$bestTune$decay
+best_size <- nn_model$bestTune$size
+```
+
+Learning rate tuned as `r best_lr` by 10 k fold cross validation. With this learning rate neural network model formed.
+
+```{r nn_plot}
+plot(nn_model,main="Cross-validation of Neural Network by learning rate", xlab="Learning Rate")
+```
+
+
+```{r nn_tuned}
+nn_tuned <- neuralnet(RESULT~.,data=GrandSlam_trn_std_nn,linear.output = FALSE,act.fct = "logistic",hidden = 1,learningrate = best_lr)
+
+
+Train_pred <- predict(nn_tuned, newdata = GrandSlam_trn_std_nn)
+Train_pred <- ifelse(Train_pred[,1]<0.4, 2,1)
+
+Test_pred <- predict(nn_tuned, newdata = GrandSlam_tst_std_nn)
+Test_pred <- ifelse(Test_pred[,1]<0.4, 2,1)
+
+results <- data.frame(actual = GrandSlam_tst_std_nn$RESULT, prediction = Test_pred)
+results$actual <- as.factor(results$actual)
+results$prediction <- as.factor(results$prediction)
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(results$prediction, results$actual)
+conf_matrix_df <- as.data.frame(conf_matrix$table)
+colnames(conf_matrix_df) <- c("Prediction", "Reference", "Frequency")
+
+# Plotting
+ggplot(conf_matrix_df, aes(Prediction,Reference, fill= Frequency)) +
+        geom_tile() + geom_text(aes(label=Frequency)) +
+        scale_fill_gradient(low="white", high="#009194") +
+        labs(x = "Reference",y = "Prediction") +
+        scale_x_discrete(labels=c("RESULT 1", "RESULT 2")) +
+        scale_y_discrete(labels=c("RESULT 1", "RESULT 2"))+
+        ggtitle("Test Data Confusion Matrix of Neural Network")
+
+# Extract performance metrics
+accuracy <- conf_matrix$overall['Accuracy']
+precision <- conf_matrix$byClass['Pos Pred Value']
+recall <- conf_matrix$byClass['Sensitivity']
+f1_score <- 2 * (precision * recall) / (precision + recall)
+
+# Create a performance table
+performance_table_nn <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy, precision, recall, f1_score))
+
+kable(performance_table_nn,  caption = "Test data Performance of Neural Network")
+```
+
+Accuracy of test data is `r conf_matrix$overall['Accuracy']`. Also this accuracy is very close to the train data performance. 
+
+```{r nn_perf_train}
+results_trn <- data.frame(actual = GrandSlam_trn_std_nn$RESULT, prediction = Train_pred)
+results_trn$actual <- as.factor(results_trn$actual)
+results_trn$prediction <- as.factor(results_trn$prediction)
+#Training performance
+conf_matrix2 <- confusionMatrix(results_trn$prediction, results_trn$actual)
+
+# Extract performance metrics
+accuracy2 <- conf_matrix2$overall['Accuracy']
+precision2 <- conf_matrix2$byClass['Pos Pred Value']
+recall2 <- conf_matrix2$byClass['Sensitivity']
+f1_score2 <- 2 * (precision2 * recall2) / (precision2 + recall2)
+
+# Create a performance table
+performance_table2 <- data.frame(
+  Metric = c("Accuracy", "Precision", "Recall", "F1-Score"),
+  Value = c(accuracy2, precision2, recall2, f1_score2))
+
+kable(performance_table2,  caption = "Train data Performance of Neural Network")
+```
+
+Weight table shows that FSW, BPC and SSW are the most effective variables to predict result. 
+```{r NeuralNet}
+weight_nn <- nn_tuned$weights[[1]][[1]]
+
+feature_importance <- data.frame(Feature = colnames(GrandSlam_trn_std)[-which(names(GrandSlam_trn_std) == "RESULT")], Weights = weight_nn[-1])
+
+kable(feature_importance[order(abs(feature_importance$Weights),decreasing = TRUE),],caption = "Feature Importance Table")
+```
+
+```{r plot_nn}
+# Plot the results of the tuning
+kable(plot(nn_tuned,rep = "best",main="Neural Nework Plot"))
+```
+### Model Comparison Table
+
+Model comparison table show that ANN has the best accuracy. Also when we consider importance of variable, all of the model indicate that FSW, BPC, SSW are the most effective statistics that effect the result. UFE and WNR are the effective too for all models.
+
+```{r model_comp}
+comp_df <- data.frame("Metric"= performance_table_log$Metric,
+                      "Logistic Reg" = performance_table_log$Value,
+                      "SVM"=performance_table_svm$Value,
+                      "Random Forest"=performance_table_rf$Value,
+                      "ANN" = performance_table_nn$Value) 
+kable(comp_df, caption = "Performance Comporison")
+
+```
+
+
+
+## Regression Modelling for TPW
+
+In regression part, we seperate the player statistics and create new data set like below. Tournament, round and gender parameters are removed because their effect on result is not much according to classification modeling results. Also, Result colun removed because our aim is find most effective player statistics to create more points in regression part.
+
+### Train-Test Data Set Preparation
+
+GrandSlam data set splited by 20% test and 80% training by random selection by considering TPW distribution. Before modelling, numeric variables in the train and test data set should be scaled. Firstly, train set is scaled and then, by using train set mean and standart deviation test set should be scaled too. Test and train sets are scaled after splitting, because, test observations should not be effect anything on the train data set in order to maintain integrity of model evaluation. After scale the train data set summary is like below.
+
+```{r train_test_reg, warning=FALSE}
+shapiro.test(GrandSlam_Reg_final$TPW)
+ggplot(GrandSlam_Reg_final,aes(x=TPW))+
+  geom_density()
+
+lmbd <-BoxCoxTrans(GrandSlam_Reg_final$TPW)$lambda
+
+boxcox_transform <- function(y, lambda) {
+  if(lambda == 0) {
+    return(log(y))
+  } else {
+    return((y^lambda - 1) / lambda)
+  }
+}
+
+GrandSlam_Reg_final$TPW <- boxcox_transform(GrandSlam_Reg_final$TPW, lmbd)
+print("After Box Cox Transformation")
+ggplot(GrandSlam_Reg_final,aes(x=TPW))+
+  geom_density()
+
+#creating test training data by considcering distribution of Result
+set.seed(25)
+GrandSlam_idx = createDataPartition(GrandSlam_Reg_final$TPW, p = 0.8, list = FALSE)
+GrandSlam_train = GrandSlam_Reg_final[GrandSlam_idx, ]
+GrandSlam_test = GrandSlam_Reg_final[-GrandSlam_idx, ]
+
+train_numeric <- GrandSlam_train %>%
+  select_if(is.numeric)
+
+test_numeric <- GrandSlam_test %>%
+  select_if(is.numeric)
+
+
+# Standardize the training predictors
+train_mean <- apply(train_numeric, 2, mean)
+train_sd <- apply(train_numeric, 2, sd)
+train_numeric_standardized <- scale(train_numeric, center = train_mean, scale = train_sd)
+
+# Standardize the test predictors using training mean and sd
+test_numeric_standardized <- scale(test_numeric, center = train_mean, scale = train_sd)
+
+# Combine standardized predictors with the response variable
+GrandSlam_trn_std <- data.frame(train_numeric_standardized)
+GrandSlam_tst_std <- data.frame(test_numeric_standardized)
+
+summary(GrandSlam_trn_std)
+```
+
+### Linear Regression
+
+As seen on the correlation plot, there is multicollinearity between FSP and SSW. FSP column removed from dataset because of multicollinearity. Also There are strong positive relationship between TPW and FSW, BPC. TPW has slightly positive relationship between SSW and WNR. ACE, DBF, UFE and NPA are not correlate with TPW.
+
+```{r corr_reg}
+
+correlation_matrix <- cor(GrandSlam_trn_std,use = "complete.obs")
+
+# Print correlation matrix
+corrplot(correlation_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45)
+
+GrandSlam_trn_std <- GrandSlam_trn_std %>%
+  select(-FSP)
+GrandSlam_tst_std <- GrandSlam_tst_std %>%
+  select(-FSP)
+```
+
+```{r lm}
+set.seed(25)
+train_control <- trainControl(method = "cv", number = 10)
+linear_model <- train(TPW~., data = GrandSlam_trn_std, 
+                      method = "lm", 
+                      trControl = train_control)
+
+summary(linear_model$finalModel)
+```
+
+ACE, DBF, UFE and NPA have small effect on TPW according to parameters. Also UFE is not significant parameter to predict TPW. On the other hand FSW, WNR and BPC has significant and positive effect on TPW. Also, R square is 0.87 that is acceptable.
+
+```{r lm_perf}
+test_pred <- predict(linear_model$finalModel, GrandSlam_tst_std, type = "response")
+rmse_lm <- RMSE(test_pred, GrandSlam_tst_std$TPW)
+perf_lm <- data.frame("Metric"<- "RMSE","Value" <- rmse_lm)
+kable(perf_lm,col.names = c("Metric", "Values"))
+```
+
+### Lasso and Ridge Regression
+
+Lasso regression can be used to find most effective parameters. Also ridge can help to find most effective parameters. Both of them used for regression in this part.
+
+```{r lasso_reg}
+x=model.matrix(TPW~.,GrandSlam_trn_std)[,-1]
+y= GrandSlam_trn_std$TPW
+
+x_test=model.matrix(TPW~.,GrandSlam_tst_std)[,-1]
+y_test= GrandSlam_tst_std$TPW
+
+grid <- seq(0.005,1,length=100)
+lasso.mod=glmnet(x,y,alpha=1,lambda=grid)
+plot(lasso.mod,main="L1 norm vs Coefficients")
+
+cv.out=cv.glmnet(x,y,alpha=1)
+plot(cv.out)
+low_predictor_lam=cv.out$lambda.1se
+bestlam=cv.out$lambda.min
+```
+
+Grid search for lambda shows that FSW, WNR and BPC are. the most effective parameters to win more points. Also, 10 fold cross validation applied to find best lambda value by considering RMSE, best lambda for lasso is `r bestlam`. For best lambda value, lasso regression use all of the variable. Coefficients of lasso regression are like below.
+
+```{r lasso}
+lasso.pred=predict(lasso.mod,s=bestlam ,newx=x_test)
+RMSE_lasso <- mean((lasso.pred-y_test)^2)
+out=glmnet(x,y,alpha=1,lambda=grid)
+lasso.coef=predict(out,type="coefficients",s=bestlam)[1:8,]
+lasso.coef
+perf_lasso <- data.frame("Metric"<- "RMSE","Value" <- RMSE_lasso)
+kable(perf_lasso,col.names = c("Metric", "Values"))  
+```
+
+Ridge regression can be used to find effective parameters and predict TPW for players.
+
+```{r ridge_reg}
+x=model.matrix(TPW~.,GrandSlam_trn_std)[,-1]
+y= GrandSlam_trn_std$TPW
+
+x_test=model.matrix(TPW~.,GrandSlam_tst_std)[,-1]
+y_test= GrandSlam_tst_std$TPW
+
+grid <- seq(0.005,1,length=100)
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid)
+plot(ridge.mod,main="L1 norm vs Coefficients")
+
+cv.out=cv.glmnet(x,y,alpha=0)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+```
+
+Lambda tuned as `r bestlam`.
+
+```{r ridge}
+ridge.pred=predict(ridge.mod,s=bestlam ,newx=x_test)
+RMSE_ridge <- mean((ridge.pred-y_test)^2)
+out=glmnet(x,y,alpha=0,lambda=grid)
+ridge.coef=predict(out,type="coefficients",s=bestlam)[1:8,]
+ridge.coef
+perf_ridge <- data.frame("Metric"<- "RMSE","Value" <- RMSE_ridge)
+kable(perf_ridge,col.names = c("Metric", "Values"))  
+```
+
+## Conclusion
+
+
